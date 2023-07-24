@@ -1,0 +1,30 @@
+{
+"compilerOptions": {
+    "target": "ES2017",
+    "module": "es6",
+    "lib": [
+      "dom"
+    ],
+    "declaration": true,
+    "declarationMap": true,
+    "allowSyntheticDefaultImports": true,
+    "inlineSources": true,
+    "sourceMap": true,
+    "importHelpers": true,
+    "strict": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "declarationDir": "./pkg/lib/types",
+    "rootDir": "./src/lib",
+    "outDir": "./pkg/lib/esm"
+  },
+  "include": [
+    "src/lib/*.ts"
+  ]
+}

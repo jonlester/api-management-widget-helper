@@ -1,0 +1,64 @@
+{
+  "name": "api-management-widget-helper",
+  "version": "1.0.0",
+  "description": "Helpers and utilities for building Azure API Management developer portal widgets",
+  "private": true,
+  "type": "module",
+  "main": "pkg/lib/index.js",
+  "module": "pkg/lib/esm/index.js",
+  "types": "pkg/lib/types/index.d.ts",
+  "scripts": {
+    "build": "npm run clean && ts-node build.ts",
+    "format": "prettier --write --config .prettierrc.json \"**/*.{js,json,ts,html}\"",
+    "lint": "eslint package.json --ext .ts  --fix --fix-type [problem,suggestion]",
+    "clean": "rimraf pkg",
+    "refresh": "npm run clean && rimraf ./node_modules ./package-lock.json && npm install",
+    "rollup": "ts-node --esm build.ts"
+  },
+  "bin": {
+    "widget-helper": "pkg/bin/cli.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jonlester/api-management-widget-helper.git"
+  },
+  "keywords": [
+    "apimanagement"
+  ],
+  "author": "jonlester",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jonlester/api-management-widget-helper/issues"
+  },
+  "homepage": "https://github.com/jonlester/api-management-widget-helper#readme",
+  "dependencies": {
+    "broadcast-channel": "^5.1.0",
+    "chalk": "^4.1.2",
+    "commander": "^11.0.0",
+    "glob": "^10.3.3",
+    "mustache": "^4.2.0",
+    "typescript": "^5.1.6"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.1.0",
+    "@tsconfig/node-lts": "^18.12.3",
+    "@types/mustache": "^4.2.2",
+    "@types/node": "^20.4.1",
+    "cpy": "^10.1.0",
+    "eslint": "^8.44.0",
+    "install-self": "^1.0.0-beta.7",
+    "magic-string": "^0.30.1",
+    "prettier": "^3.0.0",
+    "rimraf": "^5.0.1",
+    "rollup": "^3.26.2",
+    "rollup-plugin-copy": "^3.4.0",
+    "rollup-plugin-ts": "^3.2.0",
+    "ts-node": "^10.9.1"
+  },
+  "files": [
+    "README.md",
+    "package/dist/",
+    "package/bin/",
+    "package/dist-esm/lib/"
+  ]
+}
