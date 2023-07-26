@@ -12,8 +12,7 @@
     "format": "prettier --write --config .prettierrc.json \"**/*.{js,json,ts,html}\"",
     "lint": "eslint package.json --ext .ts  --fix --fix-type [problem,suggestion]",
     "clean": "rimraf pkg",
-    "refresh": "npm run clean && rimraf ./node_modules ./package-lock.json && npm install",
-    "rollup": "ts-node --esm build.ts"
+    "refresh": "npm run clean && rimraf ./node_modules ./package-lock.json && npm install && npx link-self"
   },
   "bin": {
     "widget-helper": "pkg/bin/cli.cjs"
@@ -40,20 +39,26 @@
     "typescript": "^5.1.6"
   },
   "devDependencies": {
+    "@azure/api-management-custom-widgets-tools": "^1.0.0-beta.1",
     "@rollup/plugin-node-resolve": "^15.1.0",
     "@tsconfig/node-lts": "^18.12.3",
     "@types/mustache": "^4.2.2",
     "@types/node": "^20.4.1",
+    "@typescript-eslint/eslint-plugin": "^6.2.0",
     "cpy": "^10.1.0",
     "eslint": "^8.44.0",
     "install-self": "^1.0.0-beta.7",
+    "link-self": "^0.2.0",
     "magic-string": "^0.30.1",
     "prettier": "^3.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "rimraf": "^5.0.1",
     "rollup": "^3.26.2",
     "rollup-plugin-copy": "^3.4.0",
     "rollup-plugin-ts": "^3.2.0",
-    "ts-node": "^10.9.1"
+    "ts-node": "^10.9.1",
+    "vite": "^3.0.7"
   },
   "files": [
     "README.md",

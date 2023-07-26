@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1" />
+    <script>
+      let settings = { options: {}, secrets: {} };
+    </script>
+  </head>
+
+  <body>
+    <title>Widget-Wrapper</title>
+    <iframe></iframe>
+    <script type="module" defer>
+      import { init, iframeSandboxAllows, iframeAllows } from "./sdk/dev/widget-wrapper";
+
+      init(settings);
+
+      //configure the iframe via DOM here instead of vite
+      //to avoid load race condition
+      let iframe = document.getElementsByTagName("iframe")[0];
+      iframe.id = settings.options.instanceId;
+      iframe.name = settings.options.name;
+      iframe.src = settings.options.src;
+      iframe.style = `width:${settings.options.width}};height:${settings.options.height}`;
+      iframe.sandbox = iframeSandboxAllows;
+      iframe.allow = iframeAllows;
+    </script>
+  </body>
+</html>

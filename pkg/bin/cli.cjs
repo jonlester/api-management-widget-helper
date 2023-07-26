@@ -9,22 +9,43 @@ const mustache = require('mustache');
 const chalk = require('chalk');
 const ts = require('typescript');
 
+var cliTypes;
+(function (cliTypes) {
+    function isDeployConfig(obj) {
+        const testObj = obj;
+        return !(testObj.serviceInformation == undefined ||
+            testObj.name == undefined ||
+            testObj.fallbackConfigPath == undefined);
+    }
+    cliTypes.isDeployConfig = isDeployConfig;
+})(cliTypes || (cliTypes = {}));
+
 const white = (msg) => console.log(chalk.white(msg));
 const green = (msg) => console.log(chalk.green(msg));
 const gray = (msg) => console.log(chalk.gray(msg));
 
 const templateSuffix = ".mustache";
-async function getTemplates() {
-    const sharedFiles = await getFiles(path.join(__dirname, "../", "templates", "**/*.*"));
-    const templateFiles = await getFiles(path.join(__dirname, "../", "templates", 'ts', "**", "**", "*.*"));
-    return [...sharedFiles, ...templateFiles];
+async function getTemplates(includeReact = false) {
+    const sharedFiles = await getFiles(path.join(__dirname, "../", "templates/common", "**/*.*"));
+    const reactFiles = await getFiles(path.join(__dirname, "../", "templates/react", "**/*.*", "**", "**", "*.*"));
+    return [...sharedFiles, ...(includeReact ? reactFiles : [])];
 }
 async function getFiles(path) {
     const normalizedPath = path.replace(/\\/g, "/");
     return glob.glob(normalizedPath, { dot: true });
 }
 function getDeployConfigContent(rootPath) {
-    return fs.readFileSync(path.join(rootPath, 'deploy.js'), 'utf8');
+    return getFileContent(rootPath, "vite.config.ts");
+}
+function getNewDeployConfigContent(rootPath) {
+    return getFileContent(rootPath, "deployConfig.json");
+}
+function getFileContent(rootPath, name) {
+    const path$1 = path.join(rootPath, name);
+    if (fs.existsSync(path$1))
+        return fs.readFileSync(path$1, "utf8");
+    else
+        return "";
 }
 function render(file, destRootPath, backupRootPath, deployConfig) {
     const encoding = file.endsWith(".ttf") ? "binary" : "utf8";
@@ -38,9 +59,7 @@ function render(file, destRootPath, backupRootPath, deployConfig) {
     if (__dirname.includes("\\")) {
         relativePath = relativePath.replace(/\//g, "\\");
     }
-    relativePath = relativePath
-        .replace(path.join(__dirname, "templates"), "")
-        .replace(templateSuffix, "");
+    relativePath = relativePath.replace(path.join(__dirname, "templates"), "").replace(templateSuffix, "");
     const newFilePath = path.join(destRootPath, relativePath);
     const backupFilePath = path.join(backupRootPath, relativePath);
     const dir = path.parse(newFilePath).dir;
@@ -77,7 +96,7 @@ function sameFileContents(newContent, oldFilePath, encoding) {
     if (fs.existsSync(oldFilePath)) {
         let bufferNew = Buffer.from(newContent);
         let bufferOld = Buffer.from(fs.readFileSync(oldFilePath, encoding));
-        return (Buffer.compare(bufferNew, bufferOld) == 0);
+        return Buffer.compare(bufferNew, bufferOld) == 0;
     }
     return false;
 }
@@ -109,19 +128,16 @@ class JsonProperty {
     }
 }
 function isJsonKeyType(node) {
-    return (ts.isIdentifier(node) || ts.isStringLiteral(node));
+    return ts.isIdentifier(node) || ts.isStringLiteral(node);
 }
 function isTypeWithNameAndInitializer(node) {
-    return (ts.isVariableDeclaration(node) || ts.isPropertyAssignment(node));
+    return ts.isVariableDeclaration(node) || ts.isPropertyAssignment(node);
 }
 function isJsonProperty(prop) {
     return prop instanceof JsonProperty;
 }
-function parseConfigFromScript(sourceString) {
-    const sourceFile = ts.createSourceFile('', sourceString, ts.ScriptTarget.ES3, undefined, ts.ScriptKind.JS);
-    const root = new JsonProperty("__root");
-    root.setValue(expandNode(sourceFile));
-    return rollupNodes(root).__root;
+function getSourceFile(sourceString) {
+    return ts.createSourceFile("", sourceString, ts.ScriptTarget.ES3, undefined, ts.ScriptKind.JS);
 }
 function rollupNodes(prop) {
     let obj = {};
@@ -172,24 +188,23 @@ function getNodeValue(node) {
         case ts.SyntaxKind.NumericLiteral:
         case ts.SyntaxKind.StringLiteral:
         case ts.SyntaxKind.Identifier:
-        case ts.SyntaxKind.ArrayLiteralExpression:
-            {
-                if (ts.isNumericLiteral(node))
-                    return +(node.text);
-                else if (ts.isStringLiteral(node))
-                    return node.text;
-                else if (ts.isIdentifier(node))
-                    return node.text;
-                else if (ts.isArrayLiteralExpression(node)) {
-                    let arrayValues = [];
-                    if (node.elements && node.elements.length > 0) {
-                        node.elements.forEach((element) => {
-                            arrayValues.push(getNodeValue(element));
-                        });
-                    }
-                    return arrayValues;
+        case ts.SyntaxKind.ArrayLiteralExpression: {
+            if (ts.isNumericLiteral(node))
+                return +node.text;
+            else if (ts.isStringLiteral(node))
+                return node.text;
+            else if (ts.isIdentifier(node))
+                return node.text;
+            else if (ts.isArrayLiteralExpression(node)) {
+                let arrayValues = [];
+                if (node.elements && node.elements.length > 0) {
+                    node.elements.forEach((element) => {
+                        arrayValues.push(getNodeValue(element));
+                    });
                 }
+                return arrayValues;
             }
+        }
         default:
             return undefined;
     }
@@ -219,21 +234,33 @@ function expandNode(node) {
     }
     return null;
 }
+function parseConfigFromScript(sourceString) {
+    const sourceFile = getSourceFile(sourceString);
+    const root = new JsonProperty("__root");
+    root.setValue(expandNode(sourceFile));
+    return rollupNodes(root).__root;
+}
 
-async function init(projectRoot = '.', force = false) {
+async function init(projectRoot = ".", force = false) {
     const rootDir = path.resolve(projectRoot);
-    green(`Project root path is: ${projectRoot}`);
-    green('Getting deployment configuration...');
-    const configSrc = getDeployConfigContent(rootDir);
-    const deployConfig = JSON.stringify(parseConfigFromScript(configSrc), null, 2);
-    gray(`deployConfig: ${deployConfig}`);
-    let templates = await getTemplates();
     const backupRootPath = getBackupPath(rootDir);
-    green(`Copying files.  Any existing/modified files will be backed up to: ${backupRootPath}`);
+    green(`Project root path is: ${projectRoot}`);
+    green("Getting deployment configuration...");
+    const configSrc = getDeployConfigContent(rootDir);
+    // check first for json config
+    let deployConfig = getNewDeployConfigContent(rootDir);
+    // fall back to js
+    if (!deployConfig)
+        deployConfig = JSON.stringify(parseConfigFromScript(configSrc), null, 2);
+    if (!cliTypes.isDeployConfig(JSON.parse(deployConfig)))
+        throw "Config does not exist in the root directory, or is not valid.";
+    gray(`Found config deployConfig: ${deployConfig}`);
+    let templates = await getTemplates();
+    green(`Starting file copy.  Any existing/modified files will be backed up to: ${backupRootPath}`);
     for (const file of Object.values(templates)) {
         render(file, rootDir, backupRootPath, deployConfig);
     }
-    green('Done!');
+    green("Done!");
 }
 
 async function main() {
@@ -241,11 +268,11 @@ async function main() {
     program
         .name("widget-helper")
         .usage("[command] [options]")
-        .addHelpText('after', 'example: foo')
-        .command('init')
+        .addHelpText("after", "example: foo")
+        .command("init")
         .description("Initialize the current project with the widget helper features")
-        .option('-p, --projectRoot <path>', 'relative path of the project root from the current working directory', '.')
-        .option('-s, --silent', 'initialize without prompts, allowing files to be overwritten or modified without confirmation', false)
+        .option("-p, --projectRoot <path>", "relative path of the project root from the current working directory", ".")
+        .option("-s, --silent", "initialize without prompts, allowing files to be overwritten or modified without confirmation", false)
         .action(async (options) => {
         await init(options.projectRoot, options.silent);
     });

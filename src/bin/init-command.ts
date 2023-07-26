@@ -1,29 +1,34 @@
-import path from 'path';
-import { getTemplates, getDeployConfigContent, render, getBackupPath } from './file-utility'
-import {parseConfigFromScript} from './script-helper'
-import { green, gray} from './console-helper'
+import path from "path";
+import { cliTypes } from "./type-helper";
+import * as fileUtil from "./file-utility";
+import { parseConfigFromScript, queryNodeMatchValues } from "./script-helper";
+import { green, gray } from "./console-helper";
 
+export async function init(projectRoot: string = ".", force: boolean = false) {
+  const rootDir = path.resolve(projectRoot);
+  const backupRootPath = fileUtil.getBackupPath(rootDir);
+  green(`Project root path is: ${projectRoot}`);
 
-export async function init(projectRoot: string = '.', force: boolean = false)
-{
-    const rootDir = path.resolve(projectRoot)
-    green(`Project root path is: ${projectRoot}`)
+  green("Getting deployment configuration...");
+  const configSrc = fileUtil.getDeployConfigContent(rootDir);
 
-    green('Getting deployment configuration...')
-    const configSrc = getDeployConfigContent(rootDir)
+  // check first for json config
+  let deployConfig = fileUtil.getNewDeployConfigContent(rootDir);
 
-    const deployConfig = JSON.stringify(parseConfigFromScript(configSrc), null, 2);
-    gray(`deployConfig: ${deployConfig}`)
+  // fall back to js
+  if (!deployConfig) deployConfig = JSON.stringify(parseConfigFromScript(configSrc), null, 2);
 
-    let templates = await getTemplates()
+  if (!cliTypes.isDeployConfig(JSON.parse(deployConfig)))
+    throw "Config does not exist in the root directory, or is not valid.";
 
-    const backupRootPath = getBackupPath(rootDir);
-    green(`Copying files.  Any existing/modified files will be backed up to: ${backupRootPath}`)
+  gray(`Found config deployConfig: ${deployConfig}`);
 
-    for (const file of Object.values(templates)) {
-        render(file, rootDir, backupRootPath, deployConfig);
-    }
-    
-    green('Done!')
-      
+  let templates = await fileUtil.getTemplates();
+  green(`Starting file copy.  Any existing/modified files will be backed up to: ${backupRootPath}`);
+
+  for (const file of Object.values(templates)) {
+    fileUtil.render(file, rootDir, backupRootPath, deployConfig);
+  }
+
+  green("Done!");
 }
