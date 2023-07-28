@@ -12,7 +12,7 @@ async function main() {
     .addHelpText("after", "example: foo")
     .command("init")
     .description("Initialize the current project with the widget helper features")
-    .option("-p, --projectRoot <path>", "relative path of the project root from the current working directory", ".")
+    .option("-p, --projectRoot <path>", "relative path of the project root from the current working directory", "./")
     .option(
       "-s, --silent",
       "initialize without prompts, allowing files to be overwritten or modified without confirmation",
@@ -22,6 +22,6 @@ async function main() {
       await init(options.projectRoot, options.silent);
     });
 
-  const command = await program.parseAsync(process.argv);
+  const command = program.parseAsync(process.argv).catch((reason) => program.error(reason));
 }
 main();

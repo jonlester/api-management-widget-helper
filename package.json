@@ -62,8 +62,6 @@
   },
   "files": [
     "README.md",
-    "package/dist/",
-    "package/bin/",
-    "package/dist-esm/lib/"
+    "pkg/"
   ]
 }

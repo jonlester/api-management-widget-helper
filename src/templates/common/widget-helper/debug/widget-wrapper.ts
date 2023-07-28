@@ -8,6 +8,8 @@ export const iframeSandboxAllows =
   "allow-scripts allow-modals allow-forms allow-downloads allow-popups allow-popups-to-escape-sandbox allow-top-navigation allow-presentation allow-orientation-lock allow-pointer-lock";
 export const iframeAllows = "clipboard-read; clipboard-write; camera; microphone; geolocation";
 
+export const virtualModuleId = "/@virtual/widget-wrapper";
+
 export interface WidgetWrapperOptions {
   width?: string;
   height?: string;

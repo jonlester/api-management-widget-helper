@@ -25,60 +25,79 @@ const green = (msg) => console.log(chalk.green(msg));
 const gray = (msg) => console.log(chalk.gray(msg));
 
 const templateSuffix = ".mustache";
-async function getTemplates(includeReact = false) {
-    const sharedFiles = await getFiles(path.join(__dirname, "../", "templates/common", "**/*.*"));
-    const reactFiles = await getFiles(path.join(__dirname, "../", "templates/react", "**/*.*", "**", "**", "*.*"));
-    return [...sharedFiles, ...(includeReact ? reactFiles : [])];
+const deleteSuffix = ".delete";
+async function getTemplates(basePath) {
+    return await getFiles(path.join(basePath, "**/*.*"));
+}
+async function renderTemplates(folder, destRootPath, backupRootPath, configData) {
+    const basePath = path.join(__dirname, "../", "templates", folder);
+    const files = await getTemplates(basePath);
+    for (const file of Object.values(files)) {
+        render(file, basePath, destRootPath, backupRootPath, configData);
+    }
 }
 async function getFiles(path) {
     const normalizedPath = path.replace(/\\/g, "/");
     return glob.glob(normalizedPath, { dot: true });
 }
 function getDeployConfigContent(rootPath) {
-    return getFileContent(rootPath, "vite.config.ts");
+    return getFileContent(path.join(rootPath, "deploy.js"));
 }
 function getNewDeployConfigContent(rootPath) {
-    return getFileContent(rootPath, "deployConfig.json");
+    return getFileContent(path.join(rootPath, "deployConfig.json"));
 }
-function getFileContent(rootPath, name) {
-    const path$1 = path.join(rootPath, name);
-    if (fs.existsSync(path$1))
-        return fs.readFileSync(path$1, "utf8");
+function encodingFromExt(path) {
+    return path.endsWith(".ttf") ? "binary" : "utf8";
+}
+function getFileContent(path, allowEmpty = true) {
+    if (!allowEmpty || fs.existsSync(path))
+        return fs.readFileSync(path, encodingFromExt(path));
     else
         return "";
 }
-function render(file, destRootPath, backupRootPath, deployConfig) {
-    const encoding = file.endsWith(".ttf") ? "binary" : "utf8";
-    let fileData = fs.readFileSync(file, encoding);
-    if (file.endsWith(templateSuffix)) {
+function moveFile(currentPath, newPath) {
+    fs.mkdirSync(path.parse(newPath).dir, { recursive: true });
+    fs.renameSync(currentPath, newPath);
+}
+function writeFileContent(path$1, content) {
+    const dir = path.parse(path$1).dir;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path$1, content, encodingFromExt(path$1));
+}
+function render(filePath, sourceRootPath, destRootPath, backupRootPath, configData) {
+    let fileData = getFileContent(filePath, false);
+    let deleteFile = false;
+    let relativePath = filePath.replace(sourceRootPath, "");
+    if (relativePath.endsWith(templateSuffix)) {
+        relativePath = relativePath.replace(templateSuffix, "");
         fileData = mustache.render(fileData, {
-            deployConfig: deployConfig,
+            deployConfig: configData,
         });
     }
-    let relativePath = file;
-    if (__dirname.includes("\\")) {
-        relativePath = relativePath.replace(/\//g, "\\");
+    else if (relativePath.endsWith(deleteSuffix)) {
+        deleteFile = true;
+        relativePath = relativePath.replace(deleteSuffix, "");
     }
-    relativePath = relativePath.replace(path.join(__dirname, "templates"), "").replace(templateSuffix, "");
     const newFilePath = path.join(destRootPath, relativePath);
     const backupFilePath = path.join(backupRootPath, relativePath);
-    const dir = path.parse(newFilePath).dir;
-    fs.mkdirSync(dir, { recursive: true });
+    path.parse(newFilePath).dir;
     if (fs.existsSync(newFilePath)) {
-        if (sameFileContents(fileData, newFilePath, encoding)) {
-            gray(`Skipped: ${newFilePath}`);
+        if (deleteFile) {
+            moveFile(newFilePath, backupFilePath);
+            white(`Backed up + Removed: ${relativePath}`);
+        }
+        if (sameFileContents(fileData, newFilePath)) {
+            gray(`Skipped (current): ${newFilePath}`);
         }
         else {
-            fs.mkdirSync(path.parse(backupFilePath).dir, { recursive: true });
-            fs.renameSync(newFilePath, backupFilePath);
-            white(`Backed up: ${relativePath}`);
-            fs.writeFileSync(newFilePath, fileData, { encoding });
-            white(`File Updated: ${newFilePath}`);
+            moveFile(newFilePath, backupFilePath);
+            writeFileContent(newFilePath, fileData);
+            white(`Backed up + Updated: ${relativePath}`);
         }
     }
     else {
-        fs.writeFileSync(newFilePath, fileData, { encoding });
-        white(`File Created: ${newFilePath}`);
+        writeFileContent(newFilePath, fileData);
+        white(`Created: ${newFilePath}`);
     }
 }
 function getBackupPath(root) {
@@ -92,10 +111,10 @@ function getBackupPath(root) {
     }
     return testPath;
 }
-function sameFileContents(newContent, oldFilePath, encoding) {
+function sameFileContents(newContent, oldFilePath) {
     if (fs.existsSync(oldFilePath)) {
         let bufferNew = Buffer.from(newContent);
-        let bufferOld = Buffer.from(fs.readFileSync(oldFilePath, encoding));
+        let bufferOld = Buffer.from(getFileContent(oldFilePath, false));
         return Buffer.compare(bufferNew, bufferOld) == 0;
     }
     return false;
@@ -241,25 +260,23 @@ function parseConfigFromScript(sourceString) {
     return rollupNodes(root).__root;
 }
 
-async function init(projectRoot = ".", force = false) {
+async function init(projectRoot = "./", force = false) {
     const rootDir = path.resolve(projectRoot);
     const backupRootPath = getBackupPath(rootDir);
-    green(`Project root path is: ${projectRoot}`);
+    green(`Project root path is: ${rootDir}`);
     green("Getting deployment configuration...");
-    const configSrc = getDeployConfigContent(rootDir);
-    // check first for json config
+    // check first for json config, meaning init has already been run once
     let deployConfig = getNewDeployConfigContent(rootDir);
     // fall back to js
-    if (!deployConfig)
+    if (!deployConfig) {
+        const configSrc = getDeployConfigContent(rootDir);
         deployConfig = JSON.stringify(parseConfigFromScript(configSrc), null, 2);
-    if (!cliTypes.isDeployConfig(JSON.parse(deployConfig)))
-        throw "Config does not exist in the root directory, or is not valid.";
-    gray(`Found config deployConfig: ${deployConfig}`);
-    let templates = await getTemplates();
-    green(`Starting file copy.  Any existing/modified files will be backed up to: ${backupRootPath}`);
-    for (const file of Object.values(templates)) {
-        render(file, rootDir, backupRootPath, deployConfig);
     }
+    if (!cliTypes.isDeployConfig(JSON.parse(deployConfig)))
+        throw `Config does not exist at ${rootDir}, or is not valid.`;
+    gray(`Found config deployConfig: ${deployConfig}`);
+    green(`Starting file copy.  Any existing/modified files will be backed up to: ${backupRootPath}`);
+    await renderTemplates("common", rootDir, backupRootPath, deployConfig);
     green("Done!");
 }
 
@@ -271,11 +288,11 @@ async function main() {
         .addHelpText("after", "example: foo")
         .command("init")
         .description("Initialize the current project with the widget helper features")
-        .option("-p, --projectRoot <path>", "relative path of the project root from the current working directory", ".")
+        .option("-p, --projectRoot <path>", "relative path of the project root from the current working directory", "./")
         .option("-s, --silent", "initialize without prompts, allowing files to be overwritten or modified without confirmation", false)
         .action(async (options) => {
         await init(options.projectRoot, options.silent);
     });
-    await program.parseAsync(process.argv);
+    program.parseAsync(process.argv).catch((reason) => program.error(reason));
 }
 main();

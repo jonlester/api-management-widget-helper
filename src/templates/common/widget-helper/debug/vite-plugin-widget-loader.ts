@@ -1,12 +1,11 @@
-import { ViteDevServer, IndexHtmlTransformResult, HtmlTagDescriptor } from "vite";
-import { ValuesCommon, APIM_EDITOR_DATA_KEY } from "@azure/api-management-custom-widgets-tools";
-import { WidgetWrapperOptions, defaultOptions } from "./widget-wrapper";
+import { ViteDevServer, HtmlTagDescriptor, transformWithEsbuild } from "vite";
+import { APIM_EDITOR_DATA_KEY } from "@azure/api-management-custom-widgets-tools";
+import { WidgetWrapperOptions, defaultOptions, virtualModuleId } from "./widget-wrapper";
 const deployConfig = require("../../deployConfig.json");
 
 import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
-import { JSDocNonNullableType } from "typescript";
 
 export function wrapWidget(options: WidgetWrapperOptions, widgetValues: any) {
   const WRAPPER_PLACEHOLDER = "<!--widget-wrapper-->";
@@ -23,7 +22,7 @@ export function wrapWidget(options: WidgetWrapperOptions, widgetValues: any) {
 
     const url = new URL(portalUrl);
     const protocol = url.protocol;
-    const port = url.protocol;
+    const port = url.port;
     const hostname = url.hostname;
     return new Promise<any>((resolve, reject) => {
       https
@@ -75,6 +74,12 @@ export function wrapWidget(options: WidgetWrapperOptions, widgetValues: any) {
 
   return {
     name: "wrap-widget",
+    //use a custom resolver since the path varies according to the template used
+    resolveId(id: string) {
+      if (id === virtualModuleId) {
+        return path.resolve(__dirname, "widget-wrapper.ts");
+      }
+    },
     async configureServer(server: ViteDevServer) {
       devServer = server;
 
@@ -92,7 +97,7 @@ export function wrapWidget(options: WidgetWrapperOptions, widgetValues: any) {
         if (ctx.server && html.endsWith(WRAPPER_PLACEHOLDER)) {
           let settings = await getSettings();
 
-          const template = fs.readFileSync(path.resolve("./sdk/dev/widget-page.html"), "utf-8");
+          const template = fs.readFileSync(path.join(__dirname, "widget-page.html"), "utf-8");
 
           let transform = {
             html: template,

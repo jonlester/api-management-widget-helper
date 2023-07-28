@@ -5,11 +5,18 @@ import mustache from "mustache";
 import { white, gray } from "./console-helper";
 
 const templateSuffix = ".mustache";
+const deleteSuffix = ".delete";
 
-export async function getTemplates(includeReact: boolean = false): Promise<string[]> {
-  const sharedFiles = await getFiles(pathJoin(__dirname, "../", "templates/common", "**/*.*"));
-  const reactFiles = await getFiles(pathJoin(__dirname, "../", "templates/react", "**/*.*", "**", "**", "*.*"));
-  return [...sharedFiles, ...(includeReact ? reactFiles : [])];
+async function getTemplates(basePath: string): Promise<string[]> {
+  return await getFiles(pathJoin(basePath, "**/*.*"));
+}
+
+export async function renderTemplates(folder: string, destRootPath: string, backupRootPath: string, configData: any) {
+  const basePath = pathJoin(__dirname, "../", "templates", folder);
+  const files = await getTemplates(basePath);
+  for (const file of Object.values(files)) {
+    render(file, basePath, destRootPath, backupRootPath, configData);
+  }
 }
 
 async function getFiles(path: string): Promise<string[]> {
@@ -18,56 +25,74 @@ async function getFiles(path: string): Promise<string[]> {
 }
 
 export function getDeployConfigContent(rootPath: string): string {
-  return getFileContent(rootPath, "vite.config.ts");
+  return getFileContent(pathJoin(rootPath, "deploy.js"));
 }
 
 export function getViteConfigContent(rootPath: string): string {
-  return getFileContent(rootPath, "deploy.js");
+  return getFileContent(pathJoin(rootPath, "vite.config.ts"));
 }
 
 export function getNewDeployConfigContent(rootPath: string): string {
-  return getFileContent(rootPath, "deployConfig.json");
+  return getFileContent(pathJoin(rootPath, "deployConfig.json"));
+}
+function encodingFromExt(path: string): "binary" | "utf8" {
+  return path.endsWith(".ttf") ? "binary" : "utf8";
 }
 
-function getFileContent(rootPath: string, name: string): string {
-  const path = pathJoin(rootPath, name);
-  if (fs.existsSync(path)) return fs.readFileSync(path, "utf8");
+function getFileContent(path: string, allowEmpty: boolean = true): string {
+  if (!allowEmpty || fs.existsSync(path)) return fs.readFileSync(path, encodingFromExt(path));
   else return "";
 }
+function moveFile(currentPath: string, newPath: string) {
+  fs.mkdirSync(parsePath(newPath).dir, { recursive: true });
+  fs.renameSync(currentPath, newPath);
+}
 
-export function render(file: string, destRootPath: string, backupRootPath: string, deployConfig: any) {
-  const encoding = file.endsWith(".ttf") ? "binary" : "utf8";
-  let fileData = fs.readFileSync(file, encoding);
-  if (file.endsWith(templateSuffix)) {
+function writeFileContent(path: string, content: string) {
+  const dir = parsePath(path).dir;
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path, content, encodingFromExt(path));
+}
+
+function render(
+  filePath: string,
+  sourceRootPath: string,
+  destRootPath: string,
+  backupRootPath: string,
+  configData: any,
+) {
+  let fileData = getFileContent(filePath, false);
+  let deleteFile: boolean = false;
+  let relativePath = filePath.replace(sourceRootPath, "");
+  if (relativePath.endsWith(templateSuffix)) {
+    relativePath = relativePath.replace(templateSuffix, "");
     fileData = mustache.render(fileData, {
-      deployConfig: deployConfig,
+      deployConfig: configData,
     });
+  } else if (relativePath.endsWith(deleteSuffix)) {
+    deleteFile = true;
+    relativePath = relativePath.replace(deleteSuffix, "");
   }
-
-  let relativePath = file;
-  if (__dirname.includes("\\")) {
-    relativePath = relativePath.replace(/\//g, "\\");
-  }
-  relativePath = relativePath.replace(pathJoin(__dirname, "templates"), "").replace(templateSuffix, "");
 
   const newFilePath = pathJoin(destRootPath, relativePath);
   const backupFilePath = pathJoin(backupRootPath, relativePath);
   const dir = parsePath(newFilePath).dir;
 
-  fs.mkdirSync(dir, { recursive: true });
   if (fs.existsSync(newFilePath)) {
-    if (sameFileContents(fileData, newFilePath, encoding)) {
-      gray(`Skipped: ${newFilePath}`);
+    if (deleteFile) {
+      moveFile(newFilePath, backupFilePath);
+      white(`Backed up + Removed: ${relativePath}`);
+    }
+    if (sameFileContents(fileData, newFilePath)) {
+      gray(`Skipped (current): ${newFilePath}`);
     } else {
-      fs.mkdirSync(parsePath(backupFilePath).dir, { recursive: true });
-      fs.renameSync(newFilePath, backupFilePath);
-      white(`Backed up: ${relativePath}`);
-      fs.writeFileSync(newFilePath, fileData, { encoding });
-      white(`File Updated: ${newFilePath}`);
+      moveFile(newFilePath, backupFilePath);
+      writeFileContent(newFilePath, fileData);
+      white(`Backed up + Updated: ${relativePath}`);
     }
   } else {
-    fs.writeFileSync(newFilePath, fileData, { encoding });
-    white(`File Created: ${newFilePath}`);
+    writeFileContent(newFilePath, fileData);
+    white(`Created: ${newFilePath}`);
   }
 }
 
@@ -84,10 +109,10 @@ export function getBackupPath(root: string): string {
   return testPath;
 }
 
-function sameFileContents(newContent: string, oldFilePath: string, encoding: "binary" | "utf8"): Boolean {
+function sameFileContents(newContent: string, oldFilePath: string): Boolean {
   if (fs.existsSync(oldFilePath)) {
     let bufferNew = Buffer.from(newContent);
-    let bufferOld = Buffer.from(fs.readFileSync(oldFilePath, encoding));
+    let bufferOld = Buffer.from(getFileContent(oldFilePath, false));
 
     return Buffer.compare(bufferNew, bufferOld) == 0;
   }

@@ -2,9 +2,9 @@ import { defineConfig, mergeConfig } from "vite";
 import { wrapWidget } from "./widget-helper/debug/vite-plugin-widget-loader";
 import { WidgetWrapperOptions } from "./widget-helper/debug/widget-wrapper";
 
-const valuesDefault = require("../../src/values");
+const valuesDefault = require("./src/values").valuesDefault;
 
-const baseConfig = require("./vite.config").default();
+const baseConfig = require("./vite.config").default;
 
 let developerPortalUrl: string | null = null;
 
@@ -20,10 +20,12 @@ const helperConfig = defineConfig({
     wrapWidget(
       //WidgetWrapperOptions
       {
-        developerPortalUrl: developerPortalUrl,
-        startPage: "/",
-        impersonateUserId: "1",
-        portalStyles: true,
+        developerPortalUrl: developerPortalUrl, //root url of the live developer portal
+        startPage: "/", //the page to launch on the live site when redirected
+        impersonateUserId: "1", //the id of the user impersonate. "1" is the built-in admin
+        portalStyles: true, //if you want style sheets loaded from the live site
+        width: "75%", //iframe width
+        height: "75%", //iframe height
       } as WidgetWrapperOptions,
       //any values the widget needs to function or scenarios you want to test
       valuesDefault,
