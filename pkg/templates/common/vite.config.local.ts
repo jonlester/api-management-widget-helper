@@ -12,6 +12,7 @@ if ("server" in baseConfig && "open" in baseConfig.server) {
   try {
     const url = new URL(baseConfig.server.open);
     developerPortalUrl = `${url.protocol}${url.port}//${url.hostname}`;
+    console.log(`widget-helper: Developer portal url is ${developerPortalUrl}`);
   } catch {}
 }
 

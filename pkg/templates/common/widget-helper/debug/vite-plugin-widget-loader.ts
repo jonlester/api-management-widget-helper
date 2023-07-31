@@ -1,6 +1,7 @@
 import { ViteDevServer, HtmlTagDescriptor, transformWithEsbuild } from "vite";
 import { APIM_EDITOR_DATA_KEY } from "@azure/api-management-custom-widgets-tools";
 import { WidgetWrapperOptions, defaultOptions, virtualModuleId } from "./widget-wrapper";
+import { getSecrets, ConfigSecrets } from "./auth-helper";
 const deployConfig = require("../../deployConfig.json");
 
 import * as fs from "fs";
@@ -60,7 +61,10 @@ export function wrapWidget(options: WidgetWrapperOptions, widgetValues: any) {
       )}`,
     };
 
-    const portalConfig = await getConfig(options.developerPortalUrl);
+    //const portalConfig = await getConfig(options.developerPortalUrl);
+    const portalConfig: ConfigSecrets | null = options.developerPortalUrl
+      ? await getSecrets(options.impersonateUserId, options.developerPortalUrl)
+      : null;
 
     return {
       options: {
